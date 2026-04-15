@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Star Raiders - Atari 2600 Remake</title>
+    <style>
+        body { background: #000; color: #0F0; font-family: 'Courier New', monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; overflow: hidden; }
+        canvas { border: 4px solid #444; background: #000; image-rendering: pixelated; width: 800px; height: 600px; }
+        .ui-panel { width: 800px; display: flex; justify-content: space-between; padding: 10px; background: #222; border: 2px solid #555; box-sizing: border-box; }
+        .kb-guide { font-size: 11px; color: #888; margin-top: 5px; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div class="ui-panel">
+        <div id="energy">ENERGY: 9999</div>
+        <div id="target-status">TARGET: NONE</div>
+        <div id="mode">MODE: CRUISE</div>
+    </div>
+    
+    <canvas id="gameCanvas" width="400" height="300"></canvas>
+
+    <div class="kb-guide">
+        SETAS: Pilotar | ESPAÇO: Atirar | M: Mapa | H: Warp | S: Escudo | T: Computador | W/X: Velocidade
+    </div>
+
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    // Configurações Star Raiders
+    let energy = 9999;
+    let shipX = 0, shipY = 0;
+    let speed = 2;
+    let shieldActive = false;
+    let mapMode = false;
+    let targetLock = false;
+    let warpActive = false;
+
+    // Estrelas 3D (Efeito Starfield)
+    const stars = Array.from({length: 100}, () => ({
+        x: Math.random() * 400 - 200,
+        y: Math.random() * 300 - 150,
+        z: Math.random() * 400
+    }));
+
+    // Inimigo (Nave Zylon)
+    let enemy = { x: 50, y: 30, z: 400, active: true };
+
+    window.addEventListener("keydown", (e) => {
+        const k = e.code;
+        if(k === "ArrowLeft")  shipX += 15;
+        if(k === "ArrowRight") shipX -= 15;
+        if(k === "ArrowUp")    shipY += 15;
+        if(k === "ArrowDown")  shipY -= 15;
+        
+        if(k === "KeyS") shieldActive = !shieldActive;
+        if(k === "KeyM") mapMode = !mapMode;
+        if(k === "KeyT") targetLock = !targetLock;
+        if(k === "KeyW") speed = Math.min(speed + 1, 8);
+        if(k === "KeyX") speed = Math.max(speed - 1, 0);
+        
+        if(k === "KeyH") {
+            warpActive = true;
+            energy -= 500;
+            setTimeout(() => warpActive = false, 1000);
+        }
+        
+        if(k === "Space") {
+            ctx.fillStyle = "white";
+            ctx.fillRect(0,0,400,300); // Flash do tiro
+            energy -= 10;
+        }
+    });
+
+    function update() {
+        if (!mapMode) {
+            // Consumo de energia
+            energy -= (shieldActive ? 0.5 : 0.1) + (speed * 0.05);
+
+            // Mover Estrelas (Profundidade)
+            stars.forEach(s => {
+                s.z -= speed;
+                if (s.z <= 1) {
+                    s.z = 400;
+                    s.x = Math.random() * 400 - 200;
+                    s.y = Math.random() * 300 - 150;
+                }
+            });
+
+            // Mover Inimigo
+            enemy.z -= speed;
+            if(enemy.z < 0) enemy.z = 400;
+        }
+
+        draw();
+        
+        // Atualiza UI
+        document.getElementById("energy").innerText = `ENERGY: ${Math.floor(energy)}`;
+        document.getElementById("mode").innerText = mapMode ? "MODE: GALACTIC MAP" : (warpActive ? "MODE: HYPERWARP" : "MODE: CRUISE");
+        document.getElementById("target-status").innerText = targetLock ? "TARGET: LOCKED" : "TARGET: MANUAL";
+
+        requestAnimationFrame(update);
+    }
+
+    function draw() {
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, 400, 300);
+
+        if (mapMode) {
+            // Desenho do Mapa (Grade Atari)
+            ctx.strokeStyle = "#0F0";
+            for(let i=0; i<8; i++) {
+                for(let j=0; j<6; j++) {
+                    ctx.strokeRect(i*50, j*50, 50, 50);
+                    if(i===3 && j===2) { ctx.fillStyle="red"; ctx.fillText("Z", i*50+20, j*50+30); }
+                }
+            }
+            ctx.fillStyle = "#0F0";
+            ctx.fillText("SELECT SECTOR AND PRESS H FOR WARP", 100, 280);
+        } else {
+            // Estrelas
+            ctx.fillStyle = "white";
+            stars.forEach(s => {
+                let px = (s.x + shipX) * (400 / s.z) + 200;
+                let py = (s.y + shipY) * (400 / s.z) + 150;
+                let size = (1 - s.z / 400) * 3;
+                ctx.fillRect(px, py, size, size);
+            });
+
+            // Nave Inimiga (Zylon)
+            if (enemy.active) {
+                let ex = (enemy.x + shipX) * (400 / enemy.z) + 200;
+                let ey = (enemy.y + shipY) * (400 / enemy.z) + 150;
+                let ez = (1 - enemy.z / 400) * 40;
+                
+                ctx.strokeStyle = targetLock ? "red" : "#0F0";
+                ctx.lineWidth = 2;
+                ctx.strokeRect(ex - ez/2, ey - ez/4, ez, ez/2);
+                ctx.beginPath();
+                ctx.moveTo(ex - ez/2, ey); ctx.lineTo(ex + ez/2, ey);
+                ctx.stroke();
+            }
+
+            // Mira do Cockpit
+            ctx.strokeStyle = "#0F0";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(180, 150); ctx.lineTo(220, 150);
+            ctx.moveTo(200, 130); ctx.lineTo(200, 170);
+            ctx.stroke();
+
+            // Moldura do Escudo
+            if (shieldActive) {
+                ctx.strokeStyle = "rgba(0, 255, 255, 0.3)";
+                ctx.lineWidth = 10;
+                ctx.strokeRect(0, 0, 400, 300);
+            }
+
+            // Efeito Warp
+            if (warpActive) {
+                ctx.fillStyle = "rgba(255,255,255,0.5)";
+                ctx.fillRect(0,0,400,300);
+            }
+        }
+    }
+
+    update();
+</script>
+</body>
+</html>
